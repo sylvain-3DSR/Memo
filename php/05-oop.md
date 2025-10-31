@@ -1,12 +1,14 @@
 # 🧱 Programmation orientée objet (OOP)
 
 ## 🎯 Objectif
-Appliquer les principes **SOLID**, structurer le code selon les responsabilités et exploiter pleinement les capacités de la **POO moderne** (PHP 7.4 → 8.5).
+Appliquer les principes **SOLID**, structurer le code selon les responsabilités et exploiter pleinement les capacités de la **POO moderne**
+(compatibilité PHP 7.4 → 8.4 / 8.5).
 
 ---
 
 ## 🧩 Exemple simple (classe concrète)
 
+### ✅ Version PHP 8.x (≥ 8.0) — *promotion de propriété*
 ```php
 class Product
 {
@@ -21,6 +23,29 @@ class Product
     }
 }
 ```
+
+### ⚙️ Version PHP 7.4 — *sans promotion de propriété*
+```php
+class Product
+{
+    public string $name;
+    public float $price;
+
+    public function __construct(string $name, float $price)
+    {
+        $this->name = $name;
+        $this->price = $price;
+    }
+
+    public function getFormattedPrice(): string
+    {
+        return number_format($this->price, 2) . ' €';
+    }
+}
+```
+
+🧠 *La “promotion de propriété” (déclaration directement dans le constructeur)
+est une nouveauté PHP 8.0+.*
 
 ---
 
@@ -42,14 +67,23 @@ echo $guitar->getFormattedPrice(); // "2 499,99 €"
 $guitar->play(); // "Playing Gibson Les Paul..."
 ```
 
-🧠 *L’héritage permet de spécialiser une classe existante sans dupliquer la logique.*
+### ⚙️ PHP 8.2+ — propriétés immuables (`readonly`)
+```php
+class Instrument extends Product
+{
+    public readonly string $category = 'Music';
+}
+```
+
+➡️ *Les propriétés `readonly` ont été introduites en PHP 8.2.*
+Avant cela (en 7.4-8.1), il fallait protéger la modification via un getter sans setter.
 
 ---
 
 ## 🧱 Exemple d’abstraction (classe abstraite)
 
-Une **classe abstraite** sert de **modèle commun** à plusieurs classes, mais **ne peut pas être instanciée** directement.  
-Elle définit les **comportements communs** et les **méthodes à implémenter**.
+Une **classe abstraite** sert de modèle commun.
+Elle peut contenir des propriétés, méthodes concrètes et abstraites.
 
 ```php
 abstract class PaymentMethod
@@ -68,34 +102,27 @@ abstract class PaymentMethod
         return $this->amount;
     }
 }
-
-class CreditCardPayment extends PaymentMethod
-{
-    public function pay(): bool
-    {
-        echo "Paiement de {$this->amount}€ par carte.";
-        return true;
-    }
-}
-
-class PaypalPayment extends PaymentMethod
-{
-    public function pay(): bool
-    {
-        echo "Paiement de {$this->amount}€ via PayPal.";
-        return true;
-    }
-}
 ```
 
-🧩 *Chaque sous-classe implémente sa propre logique de paiement, tout en partageant une interface commune (`pay()`).*
+### PHP 8.1+ — constantes `final` et propriétés `readonly`
+```php
+abstract class PaymentMethod
+{
+    final public const TYPE = 'GENERIC';
+    public readonly float $amount;
+
+    public function __construct(float $amount)
+    {
+        $this->amount = $amount;
+    }
+
+    abstract public function pay(): bool;
+}
+```
 
 ---
 
 ## 🧩 Exemple d’interface
-
-Une **interface** définit **un contrat** que les classes doivent respecter.  
-Elle ne contient **aucune implémentation**.
 
 ```php
 interface LoggerInterface
@@ -103,22 +130,17 @@ interface LoggerInterface
     public function info(string $message): void;
     public function error(string $message): void;
 }
+```
 
-class FileLogger implements LoggerInterface
+### PHP 8.0+ — *types unions / mixed*
+```php
+interface TransportInterface
 {
-    public function info(string $message): void
-    {
-        file_put_contents('app.log', "[INFO] $message\n", FILE_APPEND);
-    }
-
-    public function error(string $message): void
-    {
-        file_put_contents('app.log', "[ERROR] $message\n", FILE_APPEND);
-    }
+    public function send(string|array $payload): bool;
 }
 ```
 
-➡️ Toute classe qui implémente `LoggerInterface` **doit** fournir ces deux méthodes.
+➡️ *Avant PHP 8.0, il fallait écrire deux méthodes séparées ou vérifier manuellement le type.*
 
 ---
 
@@ -147,27 +169,43 @@ class EmailNotifier extends AbstractNotifier
 }
 ```
 
-🧠 *L’interface définit le contrat, la classe abstraite fournit une implémentation partielle, et la classe concrète complète le tout.*
+### 🧩 PHP 8.4+ — *Property Hooks (nouveauté 8.4)*
+```php
+class EmailNotifier extends AbstractNotifier
+{
+    public string $sender { set(string $s) { $this->sender = strtolower($s); } }
+
+    public function send(string $message): void
+    {
+        $this->log("Email envoyé par {$this->sender}: $message");
+    }
+}
+```
+➡️ *Les **property hooks** permettent d’exécuter du code lors des accès à une propriété (getter/setter implicite).
+C’est une nouveauté PHP 8.4, inexistante en PHP 7.4.*
 
 ---
 
 ## 🧠 Bonnes pratiques
 
 - ✅ Respecter les **principes SOLID** :
-  - **S** → une classe = une seule responsabilité  
-  - **O** → ouverte à l’extension, fermée à la modification  
-  - **L** → remplaçable par ses sous-classes  
-  - **I** → interfaces spécifiques, pas trop larges  
-  - **D** → dépendre d’abstractions, pas de classes concrètes  
+  - **S** → une classe = une seule responsabilité
+  - **O** → ouverte à l’extension, fermée à la modification
+  - **L** → remplaçable par ses sous-classes
+  - **I** → interfaces spécifiques, pas trop larges
+  - **D** → dépendre d’abstractions, pas de classes concrètes
 - ✅ Utiliser l’**injection de dépendances**
 - ✅ Rendre les **entités immuables**
 - ✅ Activer le **typage strict** (`declare(strict_types=1);`)
 - ✅ Préférer les **Value Objects** pour représenter les données métier
+- ✅ En PHP 8.2+, tirer parti de `readonly`
+- ✅ En PHP 8.4+, utiliser les *Property Hooks* avec parcimonie
 
 ---
 
 ## 💡 Exemple final (SOLID + clean)
 
+### ✅ PHP 8.x (promotion de propriété + typage strict)
 ```php
 interface PaymentProcessorInterface
 {
@@ -194,10 +232,26 @@ class CheckoutService
         }
     }
 }
+```
 
-// Injection d'une dépendance abstraite
-$service = new CheckoutService(new StripePaymentProcessor());
-$service->checkout(99.99);
+### ⚙️ PHP 7.4 (ancienne écriture du constructeur)
+```php
+class CheckoutService
+{
+    private PaymentProcessorInterface $processor;
+
+    public function __construct(PaymentProcessorInterface $processor)
+    {
+        $this->processor = $processor;
+    }
+
+    public function checkout(float $amount): void
+    {
+        if ($this->processor->process($amount)) {
+            echo "✔️ Paiement confirmé.";
+        }
+    }
+}
 ```
 
 ➡️ Ce code respecte :
