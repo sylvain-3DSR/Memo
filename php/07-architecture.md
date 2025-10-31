@@ -1,10 +1,10 @@
 # 🧭 Comprendre le Domain-Driven Design (DDD)
 
-Le **Domain-Driven Design** est une approche de conception logicielle
-qui met **le domaine métier au centre du code**.\
-Son objectif est de créer un code qui **reflète fidèlement la logique du
-métier** et **évolue avec lui**, plutôt que d'être dicté par la
-technique (framework, base de données, etc.).
+Le **Domain-Driven Design** (DDD) est une approche de conception
+logicielle centrée sur le **domaine métier**.\
+Elle vise à modéliser le logiciel en se basant sur la **réalité du
+métier**, pour obtenir un code plus **expressif**, **robuste** et
+**évolutif**.
 
 ------------------------------------------------------------------------
 
@@ -12,24 +12,12 @@ technique (framework, base de données, etc.).
 
 ### 1. **Domain Layer (le cœur du métier)**
 
-C'est **le cœur de ton application** : il contient les **règles
-métier**, les **entités**, les **Value Objects**, et parfois des
-**domain services**.
+C'est le **centre de gravité** de l'application.\
+On y trouve : - Les **Entités** (avec une identité persistante) - Les
+**Value Objects** - Les **Domain Services** - Les **Aggregates** - Les
+**Domain Events** - Les **Policies**
 
-#### Exemples :
-
--   `Product`, `Order`, `Customer` : des **entités** avec identité
-    unique.\
--   `Money`, `Email`, `Quantity` : des **Value Objects** (valeurs sans
-    identité).\
--   `PricingPolicy`, `DiscountService` : des **Domain Services**
-    (logique métier ne dépendant pas d'une seule entité).
-
-➡️ Le **Domain** ne dépend de rien d'autre.\
-Il ne connaît **ni Symfony, ni Doctrine, ni HTTP, ni la base de
-données**.
-
-#### Exemple :
+#### Exemple de Value Object :
 
 ``` php
 final class Price
@@ -54,76 +42,27 @@ final class Price
 }
 ```
 
-Ce `Value Object` encapsule la logique du prix (validation, addition,
-cohérence des devises) sans dépendre d'aucune technologie.
-
 ------------------------------------------------------------------------
 
 ### 2. **Application Layer (les cas d'usage)**
 
-C'est le **chef d'orchestre** : il exécute des **use cases** (actions
-métier complètes) comme : - "Créer un produit" - "Mettre à jour un
-prix" - "Passer une commande"
+C'est la couche **d'orchestration** : elle exécute les **use cases** et
+manipule les entités et services du domaine.\
+Elle ne contient pas de logique métier, uniquement la **coordination**.
 
-Chaque cas d'usage est implémenté dans un **service d'application**.\
-Il coordonne les entités et services du domaine, appelle les
-**repositories**, et publie éventuellement des **événements de
-domaine**.
-
-#### Exemple :
-
-``` php
-final class UpdateProductPriceHandler
-{
-    public function __construct(
-        private ProductRepository $repository
-    ) {}
-
-    public function __invoke(UpdateProductPriceCommand $command): void
-    {
-        $product = $this->repository->find($command->id);
-        $product->changePrice(new Price($command->price, 'EUR'));
-        $this->repository->save($product);
-    }
-}
-```
-
-> 💡 L'Application layer **ne contient pas** la logique métier --- elle
-> **l'orchestration** seulement.
+Exemples : - `CreateProductHandler` - `UpdateProductPriceHandler` -
+`CheckoutOrderHandler`
 
 ------------------------------------------------------------------------
 
 ### 3. **Infrastructure Layer (le monde extérieur)**
 
-C'est la couche où tu interagis avec le **monde technique** : - Base de
-données (Doctrine, SQL...) - Framework Symfony (contrôleurs,
-événements) - API externes, services tiers - Files d'attente, logs, etc.
+C'est ici que se trouvent les implémentations techniques : -
+Repositories Doctrine ou API - Contrôleurs Symfony - Envoi d'emails,
+logs, events, etc.
 
-C'est ici que tu **implémentes les interfaces** définies dans le domaine
-(ex. `ProductRepository`).
-
-#### Exemple :
-
-``` php
-final class DoctrineProductRepository implements ProductRepository
-{
-    public function __construct(private EntityManagerInterface $em) {}
-
-    public function find(string $id): Product
-    {
-        return $this->em->find(Product::class, $id);
-    }
-
-    public function save(Product $product): void
-    {
-        $this->em->persist($product);
-        $this->em->flush();
-    }
-}
-```
-
-➡️ Cette couche dépend de Symfony, Doctrine, etc.\
-Mais **le domaine** et **l'application** n'en savent rien.
+Elle implémente les **interfaces définies dans le domaine** pour
+découpler la logique métier de la technique.
 
 ------------------------------------------------------------------------
 
@@ -131,50 +70,159 @@ Mais **le domaine** et **l'application** n'en savent rien.
 
 ### 🗣️ Ubiquitous Language (langage omniprésent)
 
--   C'est **le vocabulaire partagé** entre les développeurs et les
-    experts métier.
--   Tu le réutilises **dans ton code** (noms de classes, méthodes,
-    tests...).
+Le vocabulaire métier est **partagé entre développeurs et experts
+métier** et **intégré au code** : noms de classes, méthodes, tests.
 
-> Exemple : ne dis pas `AddItemToBasket()` si le métier dit "ajouter un
-> produit au panier".
+> Exemple : utiliser `AddProductToCart` plutôt que `insertItem()`.
 
 ------------------------------------------------------------------------
 
 ### 🏠 Bounded Contexts
 
-Une **application complexe** est souvent divisée en plusieurs
-**contextes délimités** (bounded contexts).
+Une application complexe est divisée en **contextes délimités** (bounded
+contexts).\
+Chaque contexte a son propre modèle métier.
 
-Par exemple, dans ton e-commerce : - `Catalog` (produits, catégories) -
-`Sales` (commandes, paiements) - `Inventory` (stocks) - `Customer`
-(comptes, fidélité)
+Exemples : - `Catalog` (produits, catégories) - `Sales` (commandes,
+paiements) - `Inventory` (stocks) - `Customer` (comptes, fidélité)
 
-Chaque contexte a son propre **modèle métier**, parfois différent pour
-un même concept.
-
-> Un "Produit" dans `Catalog` n'a pas forcément les mêmes attributs
-> qu'un "Produit" dans `Inventory`.
+> Un "Produit" dans `Catalog` n'est pas forcément le même concept que
+> dans `Inventory`.
 
 ------------------------------------------------------------------------
 
-### 🔁 Repositories & Interfaces
+### ⚙️ Aggregates (agrégats)
 
-Les **repositories** abstraient la persistance : - Le domaine les
-utilise **comme interfaces** (`ProductRepository`). - L'infrastructure
-les **implémente** (Doctrine, API...).
+Un **agrégat** est un **regroupement cohérent d'entités et de value
+objects** formant une **unité logique et transactionnelle**.
 
-Ainsi, le domaine reste **indépendant du stockage**.
+-   Chaque agrégat a une **racine d'agrégat** (Aggregate Root), qui
+    contrôle l'accès aux autres entités internes.
+-   On **ne modifie jamais directement** les entités internes depuis
+    l'extérieur.
+-   L'agrégat garantit la **cohérence métier** dans sa limite.
+
+#### Exemple :
+
+``` php
+final class Order
+{
+    /** @var OrderLine[] */
+    private array $lines = [];
+
+    public function __construct(
+        private string $id,
+        private CustomerId $customerId
+    ) {}
+
+    public function addProduct(ProductId $productId, int $quantity): void
+    {
+        if ($quantity <= 0) {
+            throw new InvalidArgumentException('Quantité invalide');
+        }
+
+        $this->lines[] = new OrderLine($productId, $quantity);
+    }
+
+    public function total(): float
+    {
+        return array_sum(array_map(fn($line) => $line->subtotal(), $this->lines));
+    }
+}
+```
+
+Ici, `Order` est la **racine d'agrégat**, et `OrderLine` une **entité
+interne**.\
+On ne modifie pas `OrderLine` sans passer par `Order`.
+
+------------------------------------------------------------------------
+
+### 🧱 Repositories
+
+Les **repositories** représentent des **collections d'agrégats**.
+
+-   Le domaine définit une **interface** (`ProductRepository`).
+-   L'infrastructure fournit **l'implémentation concrète** (Doctrine,
+    API...).
+
+------------------------------------------------------------------------
+
+### 🎲 Domain Events
+
+Les **événements de domaine** représentent des faits importants qui se
+sont produits dans le domaine.
+
+Exemple : `ProductPriceChanged`, `OrderPlaced`, `CustomerRegistered`.
+
+Ils permettent : - Le **découplage** entre parties du domaine, -
+L'**audit** et la traçabilité, - L'intégration avec d'autres contextes
+(via EventBus, par exemple).
+
+#### Exemple :
+
+``` php
+final class ProductPriceChanged
+{
+    public function __construct(
+        public readonly string $productId,
+        public readonly float $newPrice
+    ) {}
+}
+```
+
+------------------------------------------------------------------------
+
+### 🏭 Factories
+
+Les **factories** centralisent la création complexe d'objets (agrégats,
+entités...).
+
+Elles sont utiles quand : - La création d'un objet nécessite beaucoup de
+logique, - L'initialisation dépend de règles métier.
+
+Exemple :
+
+``` php
+final class OrderFactory
+{
+    public function create(CustomerId $customerId): Order
+    {
+        return new Order(Uuid::uuid4()->toString(), $customerId);
+    }
+}
+```
+
+------------------------------------------------------------------------
+
+### 🧩 Policies (Règles transversales)
+
+Les **policies** définissent des règles qui peuvent s'appliquer à
+plusieurs agrégats.\
+Exemple : "Un client ne peut pas commander s'il a des factures
+impayées".
+
+Ces règles peuvent être exprimées comme des **Domain Services**.
+
+------------------------------------------------------------------------
+
+### 🧱 Anti-Corruption Layer (ACL)
+
+Lorsque tu dois **intégrer un autre système** (externe ou ancien), l'ACL
+agit comme une **barrière**.\
+Elle traduit les modèles externes en ton modèle DDD, pour **protéger la
+cohérence du domaine**.
 
 ------------------------------------------------------------------------
 
 ## 🧪 Tests et maintenabilité
 
--   Les **tests du domaine** sont **unitaires**, sans base de données.
--   Les **tests d'application** peuvent simuler les repositories.
--   Les **tests d'infrastructure** sont plus rares (intégration).
+-   Les **tests du domaine** : unitaires, sans base de données.\
+-   Les **tests d'application** : testent les use cases avec des
+    repositories en mémoire.\
+-   Les **tests d'intégration** : valident l'infrastructure (Doctrine,
+    API...).
 
-➡️ Résultat : ton code est **modulaire**, **testable**, et **évolutif**.
+➡️ Objectif : garantir un code **robuste, découplé et évolutif**.
 
 ------------------------------------------------------------------------
 
@@ -185,21 +233,27 @@ Ainsi, le domaine reste **indépendant du stockage**.
     │   ├── Domain/
     │   │   ├── Entity/
     │   │   ├── ValueObject/
+    │   │   ├── Aggregate/
+    │   │   ├── Event/
     │   │   ├── Repository/
-    │   │   └── Service/
+    │   │   ├── Service/
+    │   │   ├── Factory/
+    │   │   └── Policy/
     │   ├── Application/
     │   │   ├── Command/
     │   │   ├── Handler/
     │   │   └── DTO/
     │   └── Infrastructure/
     │       ├── Doctrine/
-    │       └── Symfony/
+    │       ├── Symfony/
+    │       └── Messaging/
 
 ------------------------------------------------------------------------
 
 ## 🚀 Avantages du DDD
 
 -   ✅ Code aligné avec le **métier réel**
--   ✅ Facilité d'évolution et de test
--   ✅ Indépendance vis-à-vis du framework
--   ✅ Architecture claire et durable
+-   ✅ Logique claire et **modulaire**
+-   ✅ Indépendance du framework et de la base de données
+-   ✅ **Cohérence** grâce aux agrégats et événements
+-   ✅ Architecture **durable et testable**
