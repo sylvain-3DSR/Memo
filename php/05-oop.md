@@ -223,7 +223,123 @@ C’est une amélioration majeure de la POO :
 
 ---
 
-## 🧠 6. Bonnes pratiques générales
+## 🧩 6bis. Qu’est-ce que l’injection de dépendances ?
+
+### 💡 Définition
+L’**injection de dépendances (DI)** consiste à **fournir à une classe ses dépendances depuis l’extérieur**, plutôt que de les créer elle-même à l’intérieur.  
+Cela favorise le **découplage**, la **testabilité** et la **modularité** du code.
+
+### 🚫 Mauvais exemple — sans injection
+```php
+class CheckoutService
+{
+    private StripePaymentProcessor $processor;
+
+    public function __construct()
+    {
+        $this->processor = new StripePaymentProcessor(); // dépendance en dur ❌
+    }
+
+    public function checkout(float $amount): void
+    {
+        $this->processor->process($amount);
+    }
+}
+```
+
+### ✅ Bon exemple — avec injection
+```php
+class CheckoutService
+{
+    public function __construct(private PaymentProcessorInterface $processor) {}
+
+    public function checkout(float $amount): void
+    {
+        $this->processor->process($amount);
+    }
+}
+
+$service = new CheckoutService(new StripePaymentProcessor());
+```
+➡️ Avantages :  
+- Découplage complet entre la classe et ses dépendances.  
+- Plus facile à tester avec des mocks ou fakes.  
+- Permet de remplacer facilement l’implémentation (ex : Stripe → PayPal).  
+
+---
+
+## 🧩 6ter. Qu’est-ce qu’une entité immuable ?
+
+### 💡 Définition
+Une **entité immuable** est un objet dont l’état ne change jamais après sa création.
+
+```php
+class Money
+{
+    public function __construct(
+        public readonly float $amount,
+        public readonly string $currency
+    ) {}
+}
+```
+
+```php
+$price = new Money(100.0, 'EUR');
+$price->amount = 200.0; // ❌ Erreur : propriété readonly
+```
+
+➡️ En PHP 8.2+, `readonly` garantit cette immuabilité.  
+En PHP 7.4, on simulait ce comportement avec des propriétés `private` et des *getters* sans *setters*.
+
+🎯 Avantages :  
+- Données stables et cohérentes.  
+- Moins d’effets de bord.  
+- Code plus sûr et prévisible.
+
+---
+
+## 🧱 6quater. Pourquoi combiner interface + abstraction ?
+
+### 💡 Idée clé
+Associer **interface** et **classe abstraite** permet de combiner les forces des deux :
+- L’interface définit un **contrat** clair.  
+- La classe abstraite fournit du **comportement commun**.  
+- Les classes concrètes restent libres d’étendre ou de modifier ce comportement.
+
+### 🔧 Exemple concret
+```php
+interface NotifierInterface
+{
+    public function send(string $message): void;
+}
+
+abstract class AbstractNotifier implements NotifierInterface
+{
+    public function log(string $message): void
+    {
+        echo "[LOG] $message\n";
+    }
+}
+
+class SmsNotifier extends AbstractNotifier
+{
+    public function send(string $message): void
+    {
+        $this->log("SMS envoyé : $message");
+    }
+}
+```
+
+### 📚 Explication
+- L’interface impose un contrat (chaque notifier doit savoir `send`).  
+- La classe abstraite mutualise le code commun (`log()`).  
+- Les classes concrètes restent libres d’implémenter leur propre logique.
+
+🎯 Avantage : on réduit la duplication, tout en maintenant la flexibilité.
+
+---
+
+## 🧠 7. Bonnes pratiques générales
 
 - ✅ Respecter les principes **SOLID** :
   - **S** : une classe = une seule responsabilité  
@@ -239,9 +355,8 @@ C’est une amélioration majeure de la POO :
 
 ---
 
-## 💡 7. Exemple final — Code “SOLID” et moderne
+## 💡 8. Exemple final — Code “SOLID” et moderne
 
-### ✅ PHP 8.x — version simplifiée et moderne
 ```php
 interface PaymentProcessorInterface
 {
@@ -269,34 +384,6 @@ class CheckoutService
     }
 }
 ```
-
-### ⚙️ PHP 7.4 — équivalent plus verbeux
-```php
-class CheckoutService
-{
-    private PaymentProcessorInterface $processor;
-
-    public function __construct(PaymentProcessorInterface $processor)
-    {
-        $this->processor = $processor;
-    }
-
-    public function checkout(float $amount): void
-    {
-        if ($this->processor->process($amount)) {
-            echo "✔️ Paiement confirmé.";
-        }
-    }
-}
-```
-
-### 📚 Explication
-- En **PHP 8.0+**, la **promotion de propriété** (`private PaymentProcessorInterface $processor`) réduit le code de 4 lignes.  
-- Le typage strict renforce la robustesse.  
-- Le design respecte **SOLID** :  
-  - **OCP** → extensible sans modification  
-  - **DIP** → dépendance sur une interface, pas une implémentation  
-  - **SRP** → une seule responsabilité par classe  
 
 ---
 
