@@ -1,24 +1,41 @@
 # Symfony UX Live Components — Cheatsheet des *Traits* (v2.31) avec exemples
 
-Ce document récapitule les principaux traits fournis par Symfony UX Live Components et propose, pour chacun, un exemple synthétique d’utilisation côté composant et/ou template.
-
-## Sommaire
-- [DefaultActionTrait](#defaultactiontrait)
-- [ComponentToolsTrait](#componenttoolstrait)
-- [ComponentWithFormTrait](#componentwithformtrait)
-- [LiveCollectionTrait](#livecollectiontrait)
-- [ValidatableComponentTrait](#validatablecomponenttrait)
-- [Tableau récapitulatif](#tableau-récapitulatif)
-- [Notes pratiques](#notes-pratiques)
+Ce document récapitule les principaux traits Live Components, propose des exemples de code et inclut une section détaillée sur la **mise à jour de l’URL lors d’un changement de LiveProp** (URL bindings).
 
 ---
 
-## `DefaultActionTrait`
+## Sommaire
 
-**Objet** : fournit l’« action par défaut » permettant le rendu et le re-rendu d’un composant côté client.  
-**Usage** : à inclure systématiquement dans un composant annoté `#[AsLiveComponent]`, même sans actions personnalisées.
+### 1. Traits & Exemples
+- [1.1 DefaultActionTrait](#11-defaultactiontrait)
+- [1.2 ComponentToolsTrait](#12-componenttoolstrait)
+- [1.3 ComponentWithFormTrait](#13-componentwithformtrait)
+- [1.4 LiveCollectionTrait](#14-livecollectiontrait)
+- [1.5 ValidatableComponentTrait](#15-validatablecomponenttrait)
 
-### Exemple minimal
+### 2. URL Bindings (mise à jour de l’URL avec les LiveProps)
+- [2.1 Principe & base](#21-principe--base)
+- [2.2 Types supportés](#22-types-supportés)
+- [2.3 Multiples bindings (plusieurs LiveProps)](#23-multiples-bindings-plusieurs-liveprops)
+- [2.4 Contrôler le nom du paramètre (`as`, `modifier`)](#24-contrôler-le-nom-du-paramètre-as-modifier)
+- [2.5 `modifier` avec nom de propriété (≥ 2.26)](#25-modifier-avec-nom-de-propriété--226)
+- [2.6 Mapper dans le *path* (`mapPath`, ≥ 2.28)](#26-mapper-dans-le-path-mappath--228)
+- [2.7 Valider la valeur initiale (PostMount + validation)](#27-valider-la-valeur-initiale-postmount--validation)
+
+### 3. Tableau récapitulatif & Notes
+- [3.1 Tableau récapitulatif des traits](#31-tableau-récapitulatif-des-traits)
+- [3.2 Notes pratiques](#32-notes-pratiques)
+
+---
+
+## 1. Traits & Exemples
+
+### 1.1 `DefaultActionTrait`
+
+**Objet** : fournit l’« action par défaut » pour le rendu/re-rendu d’un composant côté client.  
+**Usage** : à inclure systématiquement pour un composant `#[AsLiveComponent]`.
+
+**Exemple minimal**
 
 ```php
 <?php
@@ -45,19 +62,15 @@ class HelloBadge
 </div>
 ```
 
-> Ce trait active l’action par défaut attendue par le moteur Live Components pour (re)rendre le composant.
-
-
 ---
 
-## `ComponentToolsTrait`
+### 1.2 `ComponentToolsTrait`
 
-**Objet** : expose des utilitaires de communication et d’intégration front.  
-**Fonctions clés** :
-- `emit('event', payload)` / `emitSelf('event', payload)` : communication entre composants (émission d’événements).  
-- `dispatchBrowserEvent('event', detail)` : déclenchement d’un événement JavaScript sur le nœud DOM racine (fermeture de modale, focus, notifications, etc.).
+**Objet** : helpers d’événements entre composants et d’événements navigateur.  
+- `emit()`, `emitSelf()` : communication entre composants.  
+- `dispatchBrowserEvent()` : déclencher un event JS sur l’élément racine.
 
-### Exemple : émettre un événement et déclencher un événement navigateur
+**Exemple**
 
 ```php
 <?php
@@ -73,7 +86,7 @@ use Symfony\UX\LiveComponent\Attribute\LiveProp;
 class Notifier
 {
     use DefaultActionTrait;
-    use ComponentToolsTrait; // <-- apporte emit(), emitSelf(), dispatchBrowserEvent()
+    use ComponentToolsTrait;
 
     #[LiveProp(writable: true)]
     public string $message = 'Prêt.';
@@ -81,10 +94,7 @@ class Notifier
     #[LiveAction]
     public function notify(): void
     {
-        // Événement côté composants
         $this->emit('notification:created', ['message' => $this->message]);
-
-        // Événement côté navigateur (DOM)
         $this->dispatchBrowserEvent('toast', ['text' => 'Notification envoyée']);
     }
 }
@@ -98,24 +108,19 @@ class Notifier
 </div>
 
 <script>
-// Exemple JS minimal pour consommer l'événement navigateur "toast"
 document.addEventListener('toast', (e) => {
-  // e.detail.text peut être utilisé pour un toast custom
   console.log('[toast]', e.detail?.text);
 });
 </script>
 ```
 
-> `emit()` permet de chaîner des comportements entre composants ; `dispatchBrowserEvent()` permet de déléguer une partie UX au front sans écrire de logique Ajax supplémentaire.
-
-
 ---
 
-## `ComponentWithFormTrait`
+### 1.3 `ComponentWithFormTrait`
 
-**Objet** : facilite l’intégration d’un **Form Symfony** dans un composant live (instanciation, soumission Ajax, réinitialisation).
+**Objet** : intégration de **Form Symfony** dans un composant live (instanciation, soumission Ajax, reset).
 
-### Exemple : formulaire live simple
+**Exemple**
 
 ```php
 <?php
@@ -133,7 +138,7 @@ use Symfony\Component\Form\FormInterface;
 class ProfileEditor
 {
     use DefaultActionTrait;
-    use ComponentWithFormTrait; // <-- fournit getForm(), submitForm(), resetForm()
+    use ComponentWithFormTrait;
 
     public function __construct(private FormFactoryInterface $formFactory) {}
 
@@ -147,7 +152,7 @@ class ProfileEditor
     #[LiveAction]
     public function save(): void
     {
-        $this->submitForm(); // Hydrate depuis la requête LiveComponent et valide le formulaire
+        $this->submitForm();
         if ($this->getForm()->isValid()) {
             $data = $this->getForm()->getData();
             // ... persistance / traitement ...
@@ -167,16 +172,13 @@ class ProfileEditor
 </div>
 ```
 
-> `ComponentWithFormTrait` gère le cycle de vie du formulaire (instanciation, soumission, reset) côté composant.
-
-
 ---
 
-## `LiveCollectionTrait`
+### 1.4 `LiveCollectionTrait`
 
-**Objet** : ajoute des aides pour manipuler des **collections** de formulaires (`CollectionType`) en live, en particulier avec `LiveCollectionType`.
+**Objet** : manipulation de **collections** de formulaires (`CollectionType`) en live, avec `LiveCollectionType`.
 
-### Exemple : collection dynamique d’items (ajout/suppression)
+**Exemple**
 
 ```php
 <?php
@@ -197,7 +199,7 @@ class TodoManager
 {
     use DefaultActionTrait;
     use ComponentWithFormTrait;
-    use LiveCollectionTrait; // <-- helpers add/remove d’éléments
+    use LiveCollectionTrait;
 
     public function __construct(private FormFactoryInterface $formFactory) {}
 
@@ -209,7 +211,6 @@ class TodoManager
                 'allow_add' => true,
                 'allow_delete' => true,
                 'prototype' => true,
-                // Optionnel : 'entry_options' => ['label' => false],
             ])
             ->getForm();
     }
@@ -224,7 +225,6 @@ class TodoManager
       {{ form_widget(this.form.items) }}
     </div>
 
-    {# Boutons pilotés par LiveCollectionTrait #}
     <button type="button"
             data-action="live#action"
             data-live-action-param="live:collection:add"
@@ -243,16 +243,13 @@ class TodoManager
 </div>
 ```
 
-> `LiveCollectionTrait` fonctionne de pair avec `LiveCollectionType` pour ajouter/retirer des sous-formulaires sans JavaScript spécifique.
-
-
 ---
 
-## `ValidatableComponentTrait`
+### 1.5 `ValidatableComponentTrait`
 
-**Objet** : active la **validation** sur les propriétés d’un composant, avec ou sans **Form Symfony**.
+**Objet** : validation sur les propriétés d’un composant, avec ou sans **Form Symfony**.
 
-### Exemple : validation de propriétés sans `FormType`
+**Exemple**
 
 ```php
 <?php
@@ -269,7 +266,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 class SignupStep
 {
     use DefaultActionTrait;
-    use ValidatableComponentTrait; // <-- expose validate() et gère _errors
+    use ValidatableComponentTrait;
 
     #[LiveProp(writable: true)]
     #[Assert\NotBlank(message: 'L’e-mail est requis.')]
@@ -284,7 +281,7 @@ class SignupStep
     #[LiveAction]
     public function submit(): void
     {
-        $this->validate(); // Alimente _errors en cas de violations
+        $this->validate();
         if ($this->isValid()) {
             // ... traitement / persistance ...
         }
@@ -315,29 +312,236 @@ class SignupStep
 </div>
 ```
 
-> Le trait permet de valider des `LiveProp` directement, puis d’afficher les erreurs via `_errors` dans le template.
+---
 
+## 2. URL Bindings (mise à jour de l’URL avec les LiveProps)
+
+### 2.1 Principe & base
+
+Pour mettre à jour l’URL lorsqu’une `LiveProp` change, ajouter l’option `url` sur la propriété.
+
+```php
+<?php
+namespace App\Twig\Components;
+
+use Symfony\UX\LiveComponent\Attribute\AsLiveComponent;
+use Symfony\UX\LiveComponent\Attribute\LiveProp;
+use Symfony\UX\LiveComponent\DefaultActionTrait;
+
+#[AsLiveComponent]
+class SearchModule
+{
+    use DefaultActionTrait;
+
+    #[LiveProp(writable: true, url: true)]
+    public string $query = '';
+}
+```
+
+- Lorsqu’une saisie met à jour `query`, l’URL devient par exemple :  
+  `https://my.domain/search?query=my+search+string`
+- Charger cette URL initialise la valeur de la LiveProp depuis la querystring.  
+- La mise à jour se fait via `history.replaceState()` (aucune nouvelle entrée d’historique).
+
+### 2.2 Types supportés
+
+Représentations côté URL pour différents types :
+
+| Valeur JS | Représentation URL |
+|---|---|
+| `'some search string'` | `prop=some+search+string` |
+| `42` | `prop=42` |
+| `['foo', 'bar']` | `prop[0]=foo&prop[1]=bar` |
+| `{ foo: 'bar', baz: 42 }` | `prop[foo]=bar&prop[baz]=42` |
+
+> À l’arrivée (chargement de page), la valeur passe par l’**hydratation**. Si la valeur ne peut pas être hydratée, elle est **ignorée**.
+
+### 2.3 Multiples bindings (plusieurs LiveProps)
+
+Il est possible de lier **plusieurs** propriétés à l’URL. Pour que l’état soit **entièrement** représenté, **toutes** les props liées sont **écrites** comme paramètres, même si leurs valeurs n’ont pas changé.
+
+```php
+#[AsLiveComponent]
+class SearchModule
+{
+    #[LiveProp(writable: true, url: true)]
+    public string $query = '';
+
+    #[LiveProp(writable: true, url: true)]
+    public string $mode = 'fulltext';
+}
+```
+Si seule `query` est modifiée, l’URL devient :  
+`/search?query=my+query+string&mode=fulltext`
+
+### 2.4 Contrôler le nom du paramètre (`as`, `modifier`)
+
+> **Depuis 2.17** : option `as` pour définir un nom de paramètre différent du nom de la propriété.
+
+```php
+use Symfony\UX\LiveComponent\Metadata\UrlMapping;
+
+#[AsLiveComponent]
+class SearchModule
+{
+    #[LiveProp(writable: true, url: new UrlMapping(as: 'q'))]
+    public string $query = '';
+}
+```
+Résultat : `/search?q=my+query+string`
+
+**Personnalisation côté composant via `modifier`** :
+
+```php
+use Symfony\UX\LiveComponent\Metadata\UrlMapping;
+
+#[AsLiveComponent]
+class SearchModule
+{
+    #[LiveProp(writable: true, url: true, modifier: 'modifyQueryProp')]
+    public string $query = '';
+
+    #[LiveProp]
+    public ?string $alias = null;
+
+    public function modifyQueryProp(LiveProp $liveProp): LiveProp
+    {
+        if ($this->alias) {
+            $liveProp = $liveProp->withUrl(new UrlMapping(as: $this->alias));
+        }
+        return $liveProp;
+    }
+}
+```
+Dans le template, passer l’alias pour éviter les collisions :
+```twig
+<twig:SearchModule alias="q" />
+```
+
+Plusieurs instances sur la même page :
+```twig
+<twig:SearchModule alias="q1" />
+<twig:SearchModule alias="q2" />
+```
+
+### 2.5 `modifier` avec nom de propriété (≥ 2.26)
+
+> **Depuis 2.26** : la fonction `modifier` peut recevoir le **nom de la propriété** en second paramètre.
+
+```php
+abstract class AbstractSearchModule
+{
+    #[LiveProp(writable: true, url: true, modifier: 'modifyQueryProp')]
+    public string $query = '';
+
+    protected string $urlPrefix = '';
+
+    public function modifyQueryProp(LiveProp $liveProp, string $propName): LiveProp
+    {
+        if ($this->urlPrefix) {
+            return $liveProp->withUrl(new UrlMapping(as: $this->urlPrefix.'-'.$propName));
+        }
+        return $liveProp;
+    }
+}
+
+#[AsLiveComponent]
+class ImportantSearchModule extends AbstractSearchModule {}
+
+#[AsLiveComponent]
+class SecondarySearchModule extends AbstractSearchModule
+{
+    protected string $urlPrefix = 'secondary';
+}
+```
+```twig
+<twig:ImportantSearchModule />
+<twig:SecondarySearchModule />
+```
+Résultat :  
+`/search?query=my+important+query&secondary-query=my+secondary+query`
+
+### 2.6 Mapper dans le *path* (`mapPath`, ≥ 2.28)
+
+> **Depuis 2.28** : option `mapPath` pour mapper la valeur **dans le path** plutôt qu’en querystring.
+
+```php
+use Symfony\UX\LiveComponent\Metadata\UrlMapping;
+
+#[AsLiveComponent]
+class SearchModule
+{
+    #[LiveProp(writable: true, url: new UrlMapping(mapPath: true))]
+    public string $query = '';
+}
+```
+
+Route correspondante :
+```php
+#[Route('/search/{query}')]
+public function __invoke(string $query): Response
+{
+    // ... rendu d’un template qui utilise SearchModule ...
+}
+```
+Résultat : `/search/my+query+string`
+
+- Si le nom du paramètre de route diffère de la propriété, utiliser `as`.  
+- Si aucun paramètre de route n’existe, `mapPath` est **ignoré** et la valeur revient en querystring.
+
+### 2.7 Valider la valeur initiale (PostMount + validation)
+
+Comme toute `LiveProp` writable, une entrée utilisateur doit être **validée**. La valeur initiale issue de l’URL **n’est pas validée automatiquement**. Mettre en place un hook `PostMount` et la **validation** (éventuellement avec des **groupes**).
+
+```php
+use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\UX\LiveComponent\ValidatableComponentTrait;
+use Symfony\UX\TwigComponent\Attribute\PostMount;
+
+#[AsLiveComponent]
+class SearchModule
+{
+    use ValidatableComponentTrait;
+
+    #[LiveProp(writable: true, url: true)]
+    public string $query = '';
+
+    #[LiveProp(writable: true, url: true)]
+    #[Assert\NotBlank]
+    public string $mode = 'fulltext';
+
+    #[PostMount]
+    public function postMount(): void
+    {
+        // Valide "mode" sans jeter d’exception : le composant monte quand même
+        if (!$this->validateField('mode', false)) {
+            // gestion en cas d’échec (journalisation, valeur par défaut, etc.)
+        }
+    }
+}
+```
 
 ---
 
-## Tableau récapitulatif
+## 3. Tableau récapitulatif & Notes
+
+### 3.1 Tableau récapitulatif des traits
 
 | Besoin | Trait |
 |---|---|
 | Rendre un composant *live* (socle minimal) | `DefaultActionTrait` |
-| Communiquer entre composants / émettre des événements navigateur | `ComponentToolsTrait` |
+| Événements inter-composants / navigateur | `ComponentToolsTrait` |
 | Gérer un **Form Symfony** dans un composant | `ComponentWithFormTrait` |
-| Ajouter/supprimer des éléments d’une **collection** | `LiveCollectionTrait` |
-| **Valider** des propriétés (avec ou sans Form) | `ValidatableComponentTrait` |
+| Collections dynamiques dans un formulaire | `LiveCollectionTrait` |
+| **Validation** (avec ou sans Form) | `ValidatableComponentTrait` |
+
+### 3.2 Notes pratiques
+- Les traits sont **cumulables** selon les besoins.  
+- `replaceState()` est utilisé pour la mise à jour d’URL (pas d’entrée d’historique).  
+- En présence de plusieurs URL bindings, tous les paramètres sont écrits pour refléter l’état complet.  
+- Pour mapper des états complexes et garder une URL propre, envisager un **paramètre unique** et/ou `mapPath` avec un segment optionnel dans la route.  
+- Vérifier la compatibilité des options dépendantes de la version (ex. `as` ≥ 2.17, `modifier` avec `propName` ≥ 2.26, `mapPath` ≥ 2.28).
 
 ---
 
-## Notes pratiques
-- Les traits sont **cumulables** selon les besoins du composant.  
-- `ComponentToolsTrait` est optionnel si aucune émission d’événements n’est nécessaire.  
-- Pour rediriger depuis une `LiveAction`, il est possible de retourner un `RedirectResponse` ou d’étendre `AbstractController` afin d’utiliser `redirectToRoute()` / `addFlash()` directement.  
-- En cas de dépendances à des fonctionnalités plus récentes (ex. `mapPath`), vérifier la correspondance avec la version utilisée (ici v2.31).
-
----
-
-> Référence : documentation officielle Symfony UX Live Components (v2.x).
+> Référence : documentation officielle Symfony UX Live Components (v2.x, notamment 2.17/2.26/2.28/2.31).
