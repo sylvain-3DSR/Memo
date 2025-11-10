@@ -26,6 +26,14 @@ Ce document récapitule les principaux traits Live Components, propose des exemp
 - [3.1 Tableau récapitulatif des traits](#31-tableau-récapitulatif-des-traits)
 - [3.2 Notes pratiques](#32-notes-pratiques)
 
+### 4. Serializer & Profondeur (`max_depth`)
+- [4.1 Contexte](#41-contexte)
+- [4.2 Configurer le Serializer](#42-configurer-le-serializer)
+- [4.3 Définir un handler pour les cycles](#43-définir-un-handler-pour-les-cycles)
+- [4.4 Limiter la profondeur de sérialisation](#44-limiter-la-profondeur-de-sérialisation)
+- [4.5 Personnaliser la sérialisation d’une LiveProp](#45-personnaliser-la-sérialisation-dune-liveprop)
+- [4.6 Bonnes pratiques](#46-bonnes-pratiques)
+
 ---
 
 ## 1. Traits & Exemples
@@ -543,5 +551,131 @@ class SearchModule
 - Vérifier la compatibilité des options dépendantes de la version (ex. `as` ≥ 2.17, `modifier` avec `propName` ≥ 2.26, `mapPath` ≥ 2.28).
 
 ---
+
+## 4. Serializer & Profondeur (`max_depth`)
+
+### 4.1 Contexte
+
+Les composants Live utilisent le `Serializer` Symfony pour **hydrater** et **déshydrater** les `LiveProp`.  
+Quand une propriété contient un objet ou une arborescence complexe (ex. entités Doctrine, objets imbriqués), la normalisation peut produire :
+
+- des **récursions** (objets qui se référencent mutuellement),
+- ou une **profondeur excessive** (`"Over 9 levels deep, aborting normalization"`).
+
+Ces erreurs apparaissent généralement avec `useSerializerForHydration: true`.
+
+---
+
+### 4.2 Configurer le Serializer
+
+```yaml
+framework:
+    serializer:
+        enabled: true
+        enable_attributes: true
+        default_context:
+            enable_max_depth: true
+            circular_reference_handler: '@App\Serializer\CircularReferenceHandler'
+```
+
+- `enable_attributes` : active les attributs PHP 8 (`#[Groups]`, `#[MaxDepth]`, etc.)
+- `enable_max_depth` : active la prise en compte de `#[MaxDepth]`
+- `circular_reference_handler` : gère les cycles d’objets
+
+---
+
+### 4.3 Définir un handler pour les cycles
+
+```php
+<?php
+namespace App\Serializer;
+
+class CircularReferenceHandler
+{
+    public function __invoke(object $object): string
+    {
+        return sprintf('CircularRef(%s)', get_class($object));
+    }
+}
+```
+
+Ce handler empêche les boucles infinies en remplaçant les objets cycliques par une valeur descriptive.
+
+---
+
+### 4.4 Limiter la profondeur de sérialisation
+
+Utilise l’attribut `#[MaxDepth]` sur les propriétés susceptibles d’être trop profondes :
+
+```php
+use Symfony\Component\Serializer\Annotation\MaxDepth;
+
+class ProductMainDatas
+{
+    #[MaxDepth(2)]
+    public ?Availability $availability = null;
+}
+```
+
+➡️ Nécessite `enable_max_depth: true` dans la config.
+
+---
+
+### 4.5 Personnaliser la sérialisation d’une LiveProp
+
+Pour les objets complexes :
+
+```php
+#[LiveProp(hydrateWith: 'hydrateOrder', dehydrateWith: 'dehydrateOrder')]
+public ?OrderMainDatas $simulatedOrder = null;
+
+public function dehydrateOrder(?OrderMainDatas $order): ?array
+{
+    return $order
+        ? $this->serializer->normalize($order, 'json', ['max_depth' => 3])
+        : null;
+}
+
+public function hydrateOrder(?array $data): ?OrderMainDatas
+{
+    return $data
+        ? $this->serializer->denormalize($data, OrderMainDatas::class, 'json')
+        : null;
+}
+```
+
+Cela donne un contrôle total sur la profondeur et la structure.
+
+---
+
+### 4.6 Bonnes pratiques
+
+| Cas | Recommandation |
+|-----|----------------|
+| Objets simples / DTO | `useSerializerForHydration: true` |
+| Entités Doctrine ou relations multiples | Méthodes `hydrateWith` / `dehydrateWith` |
+| Graphes récursifs | `circular_reference_handler` |
+| Arbres profonds | `#[MaxDepth]` + `enable_max_depth: true` |
+| Débogage | Loguer `$serializer->normalize($data, 'json')` avant rendu |
+
+---
+
+> 💡 **Astuce Monolog**
+> 
+> Pour tracer les problèmes de sérialisation :
+> 
+> ```yaml
+> monolog:
+>   channels: [serializer]
+>   handlers:
+>     serializer:
+>       type: stream
+>       path: '%kernel.logs_dir%/serializer.log'
+>       level: debug
+>       channels: [serializer]
+> ```
+> 
+> Puis injecte `LoggerInterface $serializerLogger` dans tes composants pour observer la structure normalisée.
+
 
 > Référence : documentation officielle Symfony UX Live Components (v2.x, notamment 2.17/2.26/2.28/2.31).
