@@ -792,8 +792,6 @@ class ProductFilter
 }
 ```
 
----
-
 ### 5.5 Synthèse pratique
 
 | Situation | Hook recommandé |
@@ -806,5 +804,6 @@ class ProductFilter
 | Ajustement juste avant re-rendu | `#[PreReRender]` |
 
 
+---
 
 > Référence : documentation officielle Symfony UX Live Components (v2.x, notamment 2.17/2.26/2.28/2.31).
