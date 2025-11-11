@@ -34,6 +34,13 @@ Ce document récapitule les principaux traits Live Components, propose des exemp
 - [4.5 Personnaliser la sérialisation d’une LiveProp](#45-personnaliser-la-sérialisation-dune-liveprop)
 - [4.6 Bonnes pratiques](#46-bonnes-pratiques)
 
+### 5. Cycle de vie d’un Live Component (v2.31)
+- [5.1 Vue d’ensemble](#51-vue-densemble)
+- [5.2 Schéma temporel simplifié](#52-schéma-temporel-simplifié)
+- [5.3 Bonnes pratiques](#53-bonnes-pratiques)
+- [5.4 Exemple complet](#54-exemple-complet)
+- [5.5 Synthèse pratique](#55-synthèse-pratique)
+
 ---
 
 ## 1. Traits & Exemples
@@ -676,6 +683,128 @@ Cela donne un contrôle total sur la profondeur et la structure.
 > ```
 > 
 > Puis injecte `LoggerInterface $serializerLogger` dans tes composants pour observer la structure normalisée.
+
+## 5. Cycle de vie d’un Live Component (v2.31)
+
+### 5.1 Vue d’ensemble
+
+Un composant Live Symfony suit un **cycle de vie précis** depuis sa création jusqu’à chaque re-rendu.  
+Bien comprendre ce cycle permet de choisir le bon **hook d’exécution** (`#[PostMount]`, `#[PostHydrate]`, etc.) selon le moment où les propriétés (`LiveProp`) sont disponibles.
+
+| Étape | Description | LiveProps hydratées ? | Hook / Exemple |
+|--------|--------------|-----------------------|----------------|
+| **`__construct()`** | Appelée lors de la création du composant (injection de dépendances). | ❌ Non | `__construct(ProductRepository $repo)` |
+| **`mount()`** | Exécutée après `__construct()`, mais **avant** hydratation des LiveProps. | ❌ Non | Sert uniquement pour initialiser des valeurs de base. |
+| **`#[PostMount]`** | Appelée **après hydratation complète** des LiveProps, juste avant le premier rendu. | ✅ Oui | `#[PostMount] public function initAfterMount()` |
+| **`#[PostHydrate]`** | Appelée après chaque requête Live (interaction AJAX). | ✅ Oui | `#[PostHydrate] public function afterHydrate()` |
+| **Rendu initial** | Le template Twig est rendu avec l’état hydraté. | ✅ Oui | `<div {{ attributes }}>...</div>` |
+
+---
+
+### 5.2 Schéma temporel simplifié
+
+```
+┌────────────────────┐
+│ __construct()      │  → services & dépendances
+└────────┬───────────┘
+         │
+         ▼
+┌────────────────────┐
+│ mount()            │  → initialisation simple
+└────────┬───────────┘
+         │
+         ▼
+┌────────────────────┐
+│ Hydratation des    │
+│ LiveProps (depuis  │
+│ Twig, URL, etc.)   │
+└────────┬───────────┘
+         │
+         ▼
+┌────────────────────┐
+│ #[PostMount] hook  │  → logique dépendant des props
+└────────┬───────────┘
+         │
+         ▼
+┌────────────────────┐
+│ Rendu initial Twig │
+└────────┬───────────┘
+         │
+         ▼
+┌────────────────────┐
+│ Interaction Live   │
+│ (actions, models)  │
+│ → #[PostHydrate]   │
+└────────────────────┘
+```
+
+---
+
+### 5.3 Bonnes pratiques
+
+- ⚠️ **Ne jamais accéder à une LiveProp dans `mount()`** → elles ne sont pas encore hydratées.  
+  👉 Utilise plutôt `#[PostMount]` pour tout chargement dépendant d’un paramètre (ex. `$slug`, `$filters`).
+
+- ✅ **`#[PostMount]`** : initialiser les données qui dépendent des LiveProps (slug, id, etc.).  
+- ✅ **`#[PostHydrate]`** : exécuter une logique après chaque action Live (AJAX).  
+- ✅ **`priority`** : tous les hooks peuvent recevoir une priorité (`#[PostHydrate(priority: 10)]`).
+
+---
+
+### 5.4 Exemple complet
+
+```php
+<?php
+namespace App\Twig\Components;
+
+use App\Repository\ProductRepository;
+use Symfony\UX\LiveComponent\Attribute\AsLiveComponent;
+use Symfony\UX\LiveComponent\Attribute\LiveProp;
+use Symfony\UX\TwigComponent\Attribute\PostMount;
+use Symfony\UX\LiveComponent\Attribute\PostHydrate;
+use Symfony\UX\LiveComponent\DefaultActionTrait;
+
+#[AsLiveComponent('product_filter')]
+class ProductFilter
+{
+    use DefaultActionTrait;
+
+    public function __construct(private ProductRepository $repo) {}
+
+    #[LiveProp(writable: true, url: true)]
+    public string $slug = '';
+
+    public array $filters = [];
+
+    #[PostMount]
+    public function initFilters(): void
+    {
+        // ✅ $slug est hydraté ici
+        $this->filters = $this->repo->findFiltersByCategorySlug($this->slug);
+    }
+
+    #[PostHydrate]
+    public function afterLiveRequest(): void
+    {
+        // ✅ exécuté après chaque action Live
+        $this->filters = $this->repo->findFiltersByCategorySlug($this->slug);
+    }
+}
+```
+
+---
+
+### 5.5 Synthèse pratique
+
+| Situation | Hook recommandé |
+|------------|----------------|
+| Initialisation via services (constructeur) | `__construct()` |
+| Définition de valeurs par défaut simples | `mount()` |
+| Chargement de données dépendantes d’un LiveProp (`slug`, `id`, `query`, etc.) | `#[PostMount]` |
+| Exécution de logique après chaque interaction Live | `#[PostHydrate]` |
+| Nettoyage avant envoi au client | `#[PreDehydrate]` |
+| Ajustement juste avant re-rendu | `#[PreReRender]` |
+
 
 
 > Référence : documentation officielle Symfony UX Live Components (v2.x, notamment 2.17/2.26/2.28/2.31).
