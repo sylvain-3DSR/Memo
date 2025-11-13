@@ -41,6 +41,16 @@ Ce document récapitule les principaux traits Live Components, propose des exemp
 - [5.4 Exemple complet](#54-exemple-complet)
 - [5.5 Synthèse pratique](#55-synthèse-pratique)
 
+### 6. Loading States (affichage / classes / attributs / ciblage)
+- [6.1 Afficher ou masquer selon l’état de chargement](#61-afficher-ou-masquer-selon-létat-de-chargement)
+- [6.2 Ajouter / retirer des classes](#62-ajouter--retirer-des-classes)
+- [6.3 Ajouter / retirer un attribut HTML](#63-ajouter--retirer-un-attribut-html)
+- [6.4 Combiner plusieurs directives](#64-combiner-plusieurs-directives)
+- [6.5 Utiliser le `delay`](#65-utiliser-le-delay)
+- [6.6 Cibler une action spécifique](#66-cibler-une-action-spécifique)
+- [6.7 Cibler un modèle spécifique (`data-model`)](#67-cibler-un-modèle-spécifique-data-model)
+- [6.8 Exemples pratiques (loader bouton / barre / points)](#68-exemples-pratiques-loader-bouton--barre--points)
+
 ---
 
 ## 1. Traits & Exemples
@@ -803,7 +813,164 @@ class ProductFilter
 | Nettoyage avant envoi au client | `#[PreDehydrate]` |
 | Ajustement juste avant re-rendu | `#[PreReRender]` |
 
+---
+
+## 6. Loading States (v2.31)
+
+Les *loading states* permettent d'afficher un élément, le masquer, ou modifier son apparence **pendant qu’un composant est en cours de re-render ou qu’une LiveAction est en train d’être exécutée**.
+
+Ces comportements s’obtiennent via l’attribut :
+
+```twig
+data-loading="..."
+```
 
 ---
+
+### 6.1 Afficher ou masquer selon l’état de chargement
+
+Afficher pendant le chargement :
+
+```twig
+<span data-loading>Loading...</span>
+
+<!-- équivalent -->
+<span data-loading="show">Loading...</span>
+```
+
+Masquer pendant le chargement :
+
+```twig
+<span data-loading="hide">Saved!</span>
+```
+
+---
+
+### 6.2 Ajouter / retirer des classes
+
+Ajouter une classe :
+
+```twig
+<div data-loading="addClass(opacity-50)">...</div>
+```
+
+Retirer une classe :
+
+```twig
+<div data-loading="removeClass(opacity-50)">...</div>
+```
+
+Ajouter plusieurs classes :
+
+```twig
+<div data-loading="addClass(opacity-50 text-muted)">...</div>
+```
+
+---
+
+### 6.3 Ajouter / retirer un attribut HTML
+
+Ajouter un attribut HTML vide (`disabled`, `readonly`, etc.) :
+
+```twig
+<button data-loading="addAttribute(disabled)">
+    Save
+</button>
+```
+
+⚠️ Limite :  
+Ne fonctionne **que** pour les attributs *vides*, pas pour :
+
+```twig
+<!-- ❌ ne fonctionne pas -->
+<div data-loading="addAttribute(style='color:red')">
+```
+
+---
+
+### 6.4 Combiner plusieurs directives
+
+```twig
+<div data-loading="addClass(opacity-50) addAttribute(disabled)">
+    ...
+</div>
+```
+
+---
+
+### 6.5 Utiliser le `delay`
+
+Le loader n’apparaît qu’après un délai (évite les clignotements) :
+
+```twig
+<!-- délai 200ms -->
+<div data-loading="delay|show">Loading...</div>
+
+<!-- délai personnalisé -->
+<div data-loading="delay(500)|addClass(opacity-50)">...</div>
+```
+
+---
+
+### 6.6 Cibler une action spécifique
+
+```twig
+<span data-loading="action(saveForm)|show">
+    Saving...
+</span>
+
+<div data-loading="action(saveForm)|delay|addClass(opacity-50)">
+    ...
+</div>
+```
+
+---
+
+### 6.7 Cibler un modèle spécifique (`data-model`)
+
+```twig
+<input data-model="email" />
+
+<span data-loading="model(email)|show">
+    Checking availability...
+</span>
+```
+
+Fonctionne aussi avec des propriétés imbriquées :
+
+```twig
+<span data-loading="model(user.email)|delay|addClass(opacity-50)">
+```
+
+---
+
+### 6.8 Exemples pratiques (loader bouton / barre / points)
+
+#### Bouton + loader
+
+```twig
+<div class="actions">
+    <button class="btn" {{ live_action('reset') }}>Reset</button>
+
+    <div class="loading-zone" data-loading="action(reset)|addClass(loading-active)">
+        <div class="spinner"></div>
+    </div>
+</div>
+```
+
+#### Ligne de chargement animée
+
+```twig
+<div class="loading-line" data-loading="show"></div>
+```
+
+#### Points animés
+
+```twig
+<span class="dots" data-loading="show">
+    <span></span><span></span><span></span>
+</span>
+```
+
 
 > Référence : documentation officielle Symfony UX Live Components (v2.x, notamment 2.17/2.26/2.28/2.31).
