@@ -49,7 +49,6 @@ Ce document récapitule les principaux traits Live Components, propose des exemp
 - [6.5 Utiliser le `delay`](#65-utiliser-le-delay)
 - [6.6 Cibler une action spécifique](#66-cibler-une-action-spécifique)
 - [6.7 Cibler un modèle spécifique (`data-model`)](#67-cibler-un-modèle-spécifique-data-model)
-- [6.8 Exemples pratiques (loader bouton / barre / points)](#68-exemples-pratiques-loader-bouton--barre--points)
 
 ---
 
@@ -944,33 +943,6 @@ Fonctionne aussi avec des propriétés imbriquées :
 
 ---
 
-### 6.8 Exemples pratiques (loader bouton / barre / points)
-
-#### Bouton + loader
-
-```twig
-<div class="actions">
-    <button class="btn" {{ live_action('reset') }}>Reset</button>
-
-    <div class="loading-zone" data-loading="action(reset)|addClass(loading-active)">
-        <div class="spinner"></div>
-    </div>
-</div>
-```
-
-#### Ligne de chargement animée
-
-```twig
-<div class="loading-line" data-loading="show"></div>
-```
-
-#### Points animés
-
-```twig
-<span class="dots" data-loading="show">
-    <span></span><span></span><span></span>
-</span>
-```
 
 
 > Référence : documentation officielle Symfony UX Live Components (v2.x, notamment 2.17/2.26/2.28/2.31).
